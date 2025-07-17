@@ -117,7 +117,7 @@ async def predict_price(request: TransportRequest):
                 detail="File prediction_script.py non trovato"
             )
         
-        if not os.path.exists("dual_rf_models_TRASP_best.pkl"):
+        if not os.path.exists("models/dual_rf_models_TRASP_best.pkl"):
             logger.error("File modello non trovato")
             raise HTTPException(
                 status_code=500,
@@ -208,7 +208,7 @@ async def health_check():
     """Health check endpoint"""
     files_status = {
         "prediction_script.py": os.path.exists("prediction_script.py"),
-        "dual_rf_models_TRASP_best.pkl": os.path.exists("dual_rf_models_TRASP_best.pkl"),
+        "models/dual_rf_models_TRASP_best.pkl": os.path.exists("models/dual_rf_models_TRASP_best.pkl"),
         "logs_directory": os.path.exists("logs")
     }
     
