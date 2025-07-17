@@ -22,7 +22,7 @@ import warnings
 warnings.filterwarnings('ignore')
 
 class DualRFPredictor:
-    def __init__(self, model_path='dual_rf_models_TRASP_best.pkl'):
+    def __init__(self, model_path='models/dual_rf_models_TRASP_best.pkl'):
         """
         Inizializza il predittore caricando i modelli salvati
         """
