@@ -73,7 +73,7 @@ class PredictionResponse(BaseModel):
     status: str
     predicted_price: float = None
     confidence_score: float = None
-    model_used: str = None
+    model_name: str = None
     price_range_min: float = None
     price_range_max: float = None
     uncertainty_percentage: float = None
@@ -160,7 +160,7 @@ async def predict_price(request: TransportRequest):
                     status="success",
                     predicted_price=prediction_result.get("predicted_price"),
                     confidence_score=prediction_result.get("confidence_score"),
-                    model_used=prediction_result.get("model_used"),
+                    model_name=prediction_result.get("model_used"),
                     price_range_min=prediction_result.get("price_range_min"),
                     price_range_max=prediction_result.get("price_range_max"),
                     uncertainty_percentage=prediction_result.get("uncertainty_percentage"),
