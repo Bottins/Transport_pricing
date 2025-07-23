@@ -2,9 +2,10 @@ import requests
 import json
 
 # URL dell'API (cambia con l'URL del tuo deploy)
-API_URL = "https://transport-pricing.onrender.com/predict"  # Esempio per Render
-#API_URL = "http://localhost:8000/predict"  # Per test locale
+# API_URL = "https://transport-pricing.onrender.com/predict" 
+# API_URL = "http://localhost:8000/predict"  # Per test locale
 
+API_URL = "https://40.67.211.109/predict" 
 # Dati di test
 payload = {
     "data_carico": "2025-07-25",
