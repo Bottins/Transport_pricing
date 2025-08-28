@@ -1,11 +1,7 @@
 import requests
 import json
 
-# URL dell'API (cambia con l'URL del tuo deploy)
-# API_URL = "https://transport-pricing.onrender.com/predict" 
-# API_URL = "http://localhost:8000/predict"  # Per test locale
-
-API_URL = "https://40.67.211.109/predict" 
+API_URL = "http://40.67.211.109/predict" 
 # Dati di test
 payload = {
     "data_carico": "2025-07-25",
@@ -49,7 +45,7 @@ try:
         print("\n✅ Predizione completata!")
         print(f"💰 Prezzo stimato: €{result['predicted_price']:.2f}")
         print(f"🎯 Confidence: {result['confidence_score']:.1%}")
-        print(f"🤖 Modello: {result['model_used']}")
+        print(f"🤖 Modello: {result['model_name']}")
         print(f"📊 Range: €{result['price_range_min']:.2f} - €{result['price_range_max']:.2f}")
         print(f"⚡ Variabilità: {result['uncertainty_percentage']:.1f}%")
         print(f"⏱️ Tempo esecuzione: {result['execution_time']:.2f}s")
