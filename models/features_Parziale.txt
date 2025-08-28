@@ -1,0 +1,24 @@
+carico_tassativo
+scarico_tassativo
+km_tratta
+peso_totale
+is_isola
+spazio_calcolato
+verso_nord
+tipo_pallet
+ADR merce pericolosa
+Eccezionali
+Espressi dedicati
+Espresso Corriere(plichi-colli)
+Intermodale
+Merce generica
+Rifiuti
+Temperatura negativa
+Temperatura positiva
+Traslochi
+Trasporto auto
+Trasporto imbarcazioni
+Via aereo
+Via mare
+estero
+mese_ordine
