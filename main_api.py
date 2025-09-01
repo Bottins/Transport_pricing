@@ -48,7 +48,6 @@ class TransportRequest(BaseModel):
     km_tratta: float
     altezza: float
     lunghezza_max: float
-    larghezza: float
     misure: float
     naz_carico: str = "IT"
     naz_scarico: str = "IT"

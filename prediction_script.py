@@ -63,7 +63,7 @@ class RFPredictor:
         
         # Conversioni numeriche con maggiore compatibilità NumPy 2.x
         numeric_cols = ["importo", "km_tratta", "peso_totale", "altezza", 
-                        "lunghezza_max", "larghezza", "misure"]
+                        "lunghezza_max", "misure"]
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors="coerce").astype('float64')
