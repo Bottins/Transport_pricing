@@ -1,7 +1,14 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Tue Sep 16 21:50:01 2025
+
+@author: alexq
+"""
+
 #!/usr/bin/env python3
 """
-Modulo predittore per modelli Random Forest.
-Estratto dal codice 05_predict.py per essere utilizzato come modulo nell'API.
+Modulo predittore per modelli Random Forest - Versione aggiornata.
+Gestisce il nuovo preprocessing con encoding di allestimenti e tipo_trasporto.
 """
 
 import os
@@ -9,7 +16,7 @@ import json
 import numpy as np
 import pandas as pd
 import joblib
-from typing import Dict
+from typing import Dict, List, Optional, Union
 
 class RFPredictor:
     """Predittore per modelli RF con preprocessing integrato + GMM per confidence."""
@@ -19,8 +26,30 @@ class RFPredictor:
         self.models = {}
         self.features = {}
         self.metadata = {}
-        self.gmms = {}          # GMM per tipo
-        self.scale_method = {}  # metodo di scala per tipo (dai metadata)
+        self.gmms = {}
+        self.scale_method = {}
+        
+        # Mapping per tipo_trasporto
+        self.transport_mapping = {
+            1: 'Merce generica', 2: 'Temperatura positiva', 3: 'Temperatura negativa',
+            4: 'Trasporto auto', 5: 'ADR merce pericolosa', 6: 'Espressi dedicati',
+            8: 'Espresso Corriere(plichi-colli)', 9: 'Eccezionali', 10: 'Rifiuti',
+            11: 'Via mare', 12: 'Via treno', 13: 'Via aereo', 14: 'Intermodale',
+            15: 'Traslochi', 16: 'Cereali sfusi', 17: 'Farmaci', 18: 'Trasporto imbarcazioni',
+            19: 'Trasporto pesci vivi', 20: 'Trazioni', 21: 'Noleggio(muletti, ecc.)',
+            22: 'Sollevamenti (gru, ecc)', 23: 'Piattaforma-Distribuzione',
+            24: 'Operatore doganale', 25: 'Cisternati Chimici', 26: 'Cisternati Carburanti',
+            27: 'Cisternati Alimenti', 28: "Opere d'arte"
+        }
+        
+        # Lista dei tipi trasporto supportati nel modello
+        self.supported_transport_types = [
+            'ADR merce pericolosa', 'Eccezionali', 'Espressi dedicati',
+            'Espresso Corriere(plichi-colli)', 'Intermodale', 'Merce generica',
+            'Rifiuti', 'Temperatura negativa', 'Temperatura positiva',
+            'Traslochi', 'Trasporto auto', 'Trasporto imbarcazioni',
+            'Via aereo', 'Via mare'
+        ]
 
         for tipo in ["Completo", "Parziale", "Groupage"]:
             self._load_model(tipo)
@@ -41,7 +70,6 @@ class RFPredictor:
             with open(meta_path, 'r', encoding="utf-8") as f:
                 self.metadata[tipo] = json.load(f)
 
-            # Carica GMM se esiste
             if os.path.exists(gmm_path):
                 try:
                     self.gmms[tipo] = joblib.load(gmm_path)
@@ -50,116 +78,56 @@ class RFPredictor:
             else:
                 self.gmms[tipo] = None
 
-            # Memorizza scale method
             self.scale_method[tipo] = self.metadata[tipo].get("scale_method", "gmm_global")
             
             print(f"Modello {tipo} caricato con successo")
         else:
             print(f"Modello {tipo} non trovato in {model_path}")
 
-    def preprocess_row(self, data: dict) -> pd.DataFrame:
-        """Preprocessing dei dati di input"""
-        df = pd.DataFrame([data])
+    def process_tipi_allestimenti(self, value: Union[str, List[str], None]) -> str:
+        """
+        Processa il campo tipi_allestimenti:
+        - Se "Centinato telonato" è presente, restituisci quello
+        - Altrimenti prendi il primo elemento
+        """
+        if value is None or (isinstance(value, str) and value.lower() == 'nan'):
+            return "Base"
         
-        # Conversioni numeriche con maggiore compatibilità NumPy 2.x
-        numeric_cols = ["importo", "km_tratta", "peso_totale", "altezza", 
-                        "lunghezza_max", "misure"]
-        for col in numeric_cols:
-            if col in df.columns:
-                df[col] = pd.to_numeric(df[col], errors="coerce").astype('float64')
+        # Gestisci sia stringhe che liste
+        if isinstance(value, str):
+            elementi = [elem.strip() for elem in value.split(',')]
+        elif isinstance(value, list):
+            elementi = value
+        else:
+            return "Base"
         
-        # Conversioni date
-        for col in ["data_ordine", "data_carico"]:
-            if col in df.columns:
-                df[col] = pd.to_datetime(df[col], errors='coerce')
+        # Controlla se "Centinato telonato" è presente
+        if "Centinato telonato" in elementi:
+            return "Centinato telonato"
+        elif elementi:
+            return elementi[0]
+        else:
+            return "Base"
+
+    def process_specifiche_allestimento(self, value: Union[str, None]) -> str:
+        """
+        Processa il campo specifiche_allestimento:
+        - Se presente "sponda idraulica" o "gru", mantieni quello
+        - Altrimenti "base"
+        """
+        if value is None or value == "":
+            return "base"
         
-        if "data_ordine" in df.columns:
-            df["mese_ordine"] = pd.to_datetime(df["data_ordine"]).dt.month
-
-        # Calcolo spazio_calcolato
-        if all(c in df.columns for c in ["naz_carico", "naz_scarico", "peso_totale", "misure"]):
-            fattore = np.where(
-                (df["naz_carico"] == "IT") & (df["naz_scarico"] == "IT"), 
-                0.92, 0.735
-            )
-            df["spazio_calcolato"] = np.where(
-                df["peso_totale"] > 0,
-                np.where((df["peso_totale"] / fattore) > df["misure"], 
-                         df["peso_totale"] / fattore, df["misure"]),
-                0
-            )
-
-        # Calcolo direzioni geografiche
-        if all(c in df.columns for c in ["latitudine_scarico", "latitudine_carico", 
-                                         "longitudine_scarico", "longitudine_carico"]):
-            df['verso_nord'] = (df['latitudine_scarico'] - df['latitudine_carico']).astype(float)
-            df['verso_est'] = (df['longitudine_scarico'] - df['longitudine_carico']).astype(float)
-
-        # Classificazione pallet per Groupage
-        if all(c in df.columns for c in ['tipo_carico', 'altezza', 'peso_totale']):
-            df['tipo_pallet'] = df.apply(self._classifica_pallet, axis=1)
-
-        # Conversione flag booleani
-        for col in ['is_isola', 'scarico_tassativo', 'carico_tassativo']:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.lower().eq('si').astype(int)
-
-        # Flag estero
-        if all(c in df.columns for c in ['naz_carico', 'naz_scarico']):
-            df['estero'] = df.apply(
-                lambda r: 0 if str(r['naz_carico']).strip() == 'IT' and 
-                              str(r['naz_scarico']).strip() == 'IT' else 1, 
-                axis=1
-            )
-
-        # Mappatura tipi trasporto
-        transport_mapping = {
-            1: 'Merce generica', 2: 'Temperatura positiva', 3: 'Temperatura negativa',
-            4: 'Trasporto auto', 5: 'ADR merce pericolosa', 6: 'Espressi dedicati',
-            8: 'Espresso Corriere(plichi-colli)', 9: 'Eccezionali', 10: 'Rifiuti',
-            11: 'Via mare', 12: 'Via treno', 13: 'Via aereo', 14: 'Intermodale',
-            15: 'Traslochi', 16: 'Cereali sfusi', 17: 'Farmaci', 18: 'Trasporto imbarcazioni',
-            19: 'Trasporto pesci vivi', 20: 'Trazioni', 21: 'Noleggio(muletti, ecc.)',
-            22: 'Sollevamenti (gru, ecc)', 23: 'Piattaforma-Distribuzione',
-            24: 'Operatore doganale', 25: 'Cisternati Chimici', 26: 'Cisternati Carburanti',
-            27: 'Cisternati Alimenti', 28: "Opere d'arte"
-        }
+        value_str = str(value).strip().lower()
+        if not value_str or value_str == 'nan':
+            return "base"
         
-        all_transport_types = [
-            'ADR merce pericolosa', 'Eccezionali', 'Espressi dedicati',
-            'Espresso Corriere(plichi-colli)', 'Intermodale', 'Merce generica',
-            'Rifiuti', 'Temperatura negativa', 'Temperatura positiva',
-            'Traslochi', 'Trasporto auto', 'Trasporto imbarcazioni',
-            'Via aereo', 'Via mare'
-        ]
-
-        # Inizializza tutte le colonne di trasporto a 0
-        for transport_type in all_transport_types:
-            df[transport_type] = 0
-
-        # Processa il tipo_trasporto
-        if 'tipo_trasporto' in df.columns:
-            tipo_value = df.iloc[0]['tipo_trasporto']
-            if pd.notnull(tipo_value):
-                if isinstance(tipo_value, (int, float)):
-                    tipo_str = transport_mapping.get(int(tipo_value), '')
-                    if tipo_str in all_transport_types:
-                        df[tipo_str] = 1
-                elif isinstance(tipo_value, str):
-                    # Prova prima a convertire in numero
-                    try:
-                        tipo_num = int(tipo_value)
-                        tipo_str = transport_mapping.get(tipo_num, '')
-                        if tipo_str in all_transport_types:
-                            df[tipo_str] = 1
-                    except ValueError:
-                        # Se non è un numero, processa come stringa
-                        types = [s.strip() for s in tipo_value.split(',')]
-                        for t in types:
-                            if t in all_transport_types:
-                                df[t] = 1
-        
-        return df
+        if "sponda idraulica" in value_str:
+            return "sponda idraulica"
+        elif "gru" in value_str:
+            return "gru"
+        else:
+            return "base"
 
     def _classifica_pallet(self, row) -> int:
         """Classifica il tipo di pallet per il Groupage"""
@@ -191,6 +159,132 @@ class RFPredictor:
         except:
             return 8
 
+    def preprocess_row(self, data: dict) -> pd.DataFrame:
+        """Preprocessing dei dati di input con nuova gestione allestimenti"""
+        df = pd.DataFrame([data])
+        
+        # Conversioni numeriche
+        numeric_cols = ["importo", "km_tratta", "peso_totale", "altezza", 
+                        "lunghezza_max", "misure"]
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce").astype('float64')
+        
+        # Conversioni date
+        for col in ["data_ordine", "data_carico"]:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+        
+        # Mese ordine
+        if "data_ordine" in df.columns:
+            df["mese_ordine"] = pd.to_datetime(df["data_ordine"]).dt.month
+
+        # Calcolo spazio_calcolato
+        if all(c in df.columns for c in ["naz_carico", "naz_scarico", "peso_totale", "misure"]):
+            fattore = np.where(
+                (df["naz_carico"] == "IT") & (df["naz_scarico"] == "IT"), 
+                0.92, 0.735
+            )
+            df["spazio_calcolato"] = np.where(
+                df["peso_totale"] > 0,
+                np.where((df["peso_totale"] / fattore) > df["misure"], 
+                         df["peso_totale"] / fattore, df["misure"]),
+                0
+            )
+
+        # Calcolo Perc_camion
+        if 'spazio_calcolato' in df.columns:
+            df['Perc_camion'] = np.where(
+                df['spazio_calcolato'] > 0,
+                df['spazio_calcolato'] / 340000,
+                np.nan
+            )
+
+        # Calcolo verso_nord
+        if all(c in df.columns for c in ["latitudine_scarico", "latitudine_carico"]):
+            df['verso_nord'] = (df['latitudine_scarico'] - df['latitudine_carico']).astype(float)
+            # Non serve verso_est per il modello secondo features_Parziale.txt
+
+        # Classificazione pallet
+        if all(c in df.columns for c in ['tipo_carico', 'altezza', 'peso_totale']):
+            df['tipo_pallet'] = df.apply(self._classifica_pallet, axis=1)
+
+        # Conversione flag booleani
+        if 'is_isola' in df.columns:
+            df['is_isola'] = df['is_isola'].astype(str).str.lower().eq('si').astype(int)
+
+        # Calcolo tassativi
+        tassativi_val = 0
+        if 'scarico_tassativo' in df.columns:
+            if df['scarico_tassativo'].iloc[0] and str(df['scarico_tassativo'].iloc[0]).lower() == 'si':
+                tassativi_val += 1
+        if 'carico_tassativo' in df.columns:
+            if df['carico_tassativo'].iloc[0] and str(df['carico_tassativo'].iloc[0]).lower() == 'si':
+                tassativi_val += 1
+        df['tassativi'] = tassativi_val
+
+        # Flag estero
+        if all(c in df.columns for c in ['naz_carico', 'naz_scarico']):
+            df['estero'] = df.apply(
+                lambda r: 0 if str(r['naz_carico']).strip() == 'IT' and 
+                              str(r['naz_scarico']).strip() == 'IT' else 1, 
+                axis=1
+            )
+
+        # ====== GESTIONE ALLESTIMENTI ======
+        # Processa tipi_allestimenti
+        if 'tipi_allestimenti' in df.columns:
+            allestimento_scelto = self.process_tipi_allestimenti(df['tipi_allestimenti'].iloc[0])
+            
+            # Crea tutte le colonne allestimento_ e imposta a 0
+            allestimento_columns = [col for col in self.features.get(data.get('tipo_carico', 'Completo').capitalize(), []) 
+                                   if col.startswith('allestimento_')]
+            
+            for col in allestimento_columns:
+                df[col] = 0
+            
+            # Imposta a 1 solo la colonna corrispondente
+            col_name = f'allestimento_{allestimento_scelto}'
+            if col_name in df.columns:
+                df[col_name] = 1
+
+        # Processa specifiche_allestimento
+        if 'specifiche_allestimento' in df.columns:
+            specifica_scelta = self.process_specifiche_allestimento(df['specifiche_allestimento'].iloc[0])
+            
+            # Crea le colonne specifiche
+            for spec in ['base', 'gru', 'sponda idraulica']:
+                df[f'specifica_{spec}'] = 0
+            
+            # Imposta a 1 solo la specifica scelta
+            df[f'specifica_{specifica_scelta}'] = 1
+
+        # ====== GESTIONE TIPO TRASPORTO ======
+        # Inizializza tutte le colonne di trasporto a 0
+        for transport_type in self.supported_transport_types:
+            df[transport_type] = 0
+
+        # Processa il tipo_trasporto
+        if 'tipo_trasporto' in df.columns:
+            tipo_value = df.iloc[0]['tipo_trasporto']
+            if pd.notnull(tipo_value):
+                if isinstance(tipo_value, (int, float)):
+                    tipo_str = self.transport_mapping.get(int(tipo_value), '')
+                    if tipo_str in self.supported_transport_types:
+                        df[tipo_str] = 1
+                elif isinstance(tipo_value, str):
+                    try:
+                        tipo_num = int(tipo_value)
+                        tipo_str = self.transport_mapping.get(tipo_num, '')
+                        if tipo_str in self.supported_transport_types:
+                            df[tipo_str] = 1
+                    except ValueError:
+                        # Se è già una stringa tipo "Merce generica"
+                        if tipo_value in self.supported_transport_types:
+                            df[tipo_value] = 1
+        
+        return df
+
     def _gmm_mixture_std(self, gm) -> float:
         """Calcola la deviazione standard della miscela GMM"""
         if gm is None:
@@ -198,7 +292,6 @@ class RFPredictor:
         
         w = gm.weights_
         mu = gm.means_.flatten()
-        # Compatibilità NumPy 2.x - gestione più robusta dei tipi
         sigma2 = np.array([np.squeeze(gm.covariances_[i]) for i in range(gm.n_components)], dtype=np.float64)
         
         mu_mix = np.sum(w * mu)
@@ -263,7 +356,6 @@ class RFPredictor:
             preproc = pipe.named_steps["prep"]
             
             X_transformed = preproc.transform(X)
-            # Compatibilità NumPy 2.x - uso dtype esplicito
             tree_preds = np.array([tree.predict(X_transformed) for tree in rf.estimators_], dtype=np.float64)
             
             std_pred = float(np.std(tree_preds))
@@ -278,10 +370,9 @@ class RFPredictor:
                 else:
                     scale = self._gmm_mixture_std(gm)
             else:
-                # Fallback se GMM non disponibile
                 scale = max(median_pred * 0.1, 100.0)
 
-            # Calcola confidence score - uso np.maximum per NumPy 2.x
+            # Calcola confidence score
             denom = std_pred + float(scale) + 1e-9
             confidence = 1.0 - (std_pred / denom)
             confidence = float(np.clip(confidence, 0.0, 1.0))

@@ -1,13 +1,53 @@
-carico_tassativo
-scarico_tassativo
 km_tratta
 peso_totale
 altezza
 lunghezza_max
 is_isola
-spazio_calcolato
+allestimento_Aero-Cargo
+allestimento_Autovettura
+allestimento_Base
+allestimento_Bisarca
+allestimento_Capi Appesi
+allestimento_Carrello elevatore
+allestimento_Carro a quattro assi scoperto
+allestimento_Carro ferroviario
+allestimento_Cassa mobile scarrabile
+allestimento_Cassone aperto
+allestimento_Cassone portacontainer
+allestimento_Cassone ribaltabile con sponde alte
+allestimento_Cassone ribaltabile trilaterale
+allestimento_Centinato alla francese
+allestimento_Centinato telonato
+allestimento_Cisternato chimico
+allestimento_Cisternato per alimenti
+allestimento_Cisternato per carburante
+allestimento_Collo d'Oca
+allestimento_Collo d'oca centinato
+allestimento_Eli-cargo
+allestimento_Eli-passeggeri
+allestimento_Furgonato in alluminio
+allestimento_Furgonato per biga
+allestimento_Gran volume centinato
+allestimento_Gru
+allestimento_Isotermico con frigo
+allestimento_Nave portacontainer
+allestimento_Pianale senza sponde
+allestimento_Ribassato
+allestimento_Semifurgonato
+allestimento_Speciali per eccezionali
+allestimento_Trasporto animali
+allestimento_Trattore
+allestimento_Treno
+allestimento_Vasche
+allestimento_Walking Floor
+allestimento_Walking Floor carico laterale
+specifica_base
+specifica_gru
+specifica_sponda idraulica
+Perc_camion
 verso_nord
 tipo_pallet
+tassativi
 ADR merce pericolosa
 Eccezionali
 Espressi dedicati

@@ -1,10 +1,10 @@
 {
   "tipo": "Completo",
   "random_state": 1,
-  "n_estimators": 500,
-  "test_size": 0.025,
+  "n_estimators": 750,
+  "test_size": 0.1,
   "interval_percent": 50.0,
-  "n_train": 2088,
+  "n_train": 12492,
   "scale_method": "gmm_global",
   "gmm_components": 4
 }
